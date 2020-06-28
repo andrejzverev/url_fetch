@@ -36,6 +36,7 @@ func parseSite(site string, word string, ct int, wg *sync.WaitGroup, result map[
 	if err != nil {
 		panic(err)
 	}
+	defer resp.Body.Close()
 
 	body, _ := ioutil.ReadAll(resp.Body)
 	count := bytes.Count(body, myword)
