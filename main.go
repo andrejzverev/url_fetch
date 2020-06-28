@@ -7,6 +7,7 @@ import (
 	"io/ioutil"
 	"net/http"
 	"strings"
+	"sync"
 	"time"
 )
 
@@ -22,42 +23,45 @@ func parseUrls(s []string) map[string]int {
 	return urls
 }
 
-func parseSite(site string, word string, ct int, finished chan bool, result map[string]int) {
+func parseSite(site string, word string, ct int, wg *sync.WaitGroup, result map[string]int) {
 
+	defer wg.Done()
 	myword := []byte(word)
-	client := http.Client{Timeout: time.Duration(ct) * time.Second}
+
+	client := http.Client{
+		Timeout: time.Duration(ct) * time.Second,
+	}
+
 	resp, err := client.Get(site)
 	if err != nil {
-		defer resp.Body.Close()
+		panic(err)
 	}
+
 	body, _ := ioutil.ReadAll(resp.Body)
 	count := bytes.Count(body, myword)
 	result[site] = count
-	//fmt.Printf("Site %s is finished\n", site)
-	finished <- true
 }
 
 func main() {
 
+	var wg sync.WaitGroup
 	var urls map[string]int
 	var url string
-	finished := make(chan bool)
 
 	word := flag.String("word", "", "string to find")
-	ct := flag.Int("ct", 5, "Connection Timeout")
+	ct := flag.Int("ct", 10, "Connection Timeout")
 	flag.Parse()
 
 	urls = parseUrls(flag.Args())
+	wg.Add(len(urls))
 	for url = range urls {
-		//fmt.Printf("%s\n", url)
-		go parseSite(url, *word, *ct, finished, urls)
+		go parseSite(url, *word, *ct, &wg, urls)
 
 	}
-	<-finished
+	wg.Wait()
+
 	var count int
 	for url, count = range urls {
-		fmt.Printf("%s - %d\n", url, count)
+		fmt.Printf("%s - contains word(%s) %d of times\n", url, *word, count)
 	}
-	//mt.Printf("%s - %d - %d\n", *word, *ct, *rt)
-	//fmt.Printf("%s\n", urls)
 }
